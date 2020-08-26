@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -26,7 +26,7 @@
 package org.java_websocket.exceptions;
 
 /**
- * exception which indicates that a invalid data was recieved
+ * exception which indicates that a invalid data was received
  */
 public class InvalidDataException extends Exception {
 
@@ -36,7 +36,7 @@ public class InvalidDataException extends Exception {
     private static final long serialVersionUID = 3731842424390998726L;
 
     /**
-     * attribut which closecode will be returned
+     * attribute which closecode will be returned
      */
     private final int closecode;
 

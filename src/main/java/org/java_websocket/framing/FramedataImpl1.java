@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -159,7 +159,7 @@ public abstract class FramedataImpl1 implements Framedata {
 
     @Override
     public String toString() {
-        return "Framedata{ optcode:" + getOpcode() + ", fin:" + isFin() + ", rsv1:" + isRSV1() + ", rsv2:" + isRSV2() + ", rsv3:" + isRSV3() + ", payloadlength:[pos:" + unmaskedpayload.position() + ", len:" + unmaskedpayload.remaining() + "], payload:" + ( unmaskedpayload.remaining() > 1000 ? "(too big to display)" : new String( unmaskedpayload.array() ) ) + '}';
+        return "Framedata{ opcode:" + getOpcode() + ", fin:" + isFin() + ", rsv1:" + isRSV1() + ", rsv2:" + isRSV2() + ", rsv3:" + isRSV3() + ", payload length:[pos:" + unmaskedpayload.position() + ", len:" + unmaskedpayload.remaining() + "], payload:" + ( unmaskedpayload.remaining() > 1000 ? "(too big to display)" : new String( unmaskedpayload.array() ) ) + '}';
     }
 
     /**
@@ -183,7 +183,7 @@ public abstract class FramedataImpl1 implements Framedata {
     /**
      * Set the rsv1 of this frame to the provided boolean
      *
-     * @param rsv1 true if fin has to be set
+     * @param rsv1 true if rsv1 has to be set
      */
     public void setRSV1(boolean rsv1) {
         this.rsv1 = rsv1;
@@ -192,7 +192,7 @@ public abstract class FramedataImpl1 implements Framedata {
     /**
      * Set the rsv2 of this frame to the provided boolean
      *
-     * @param rsv2 true if fin has to be set
+     * @param rsv2 true if rsv2 has to be set
      */
     public void setRSV2(boolean rsv2) {
         this.rsv2 = rsv2;
@@ -201,7 +201,7 @@ public abstract class FramedataImpl1 implements Framedata {
     /**
      * Set the rsv3 of this frame to the provided boolean
      *
-     * @param rsv3 true if fin has to be set
+     * @param rsv3 true if rsv3 has to be set
      */
     public void setRSV3(boolean rsv3) {
         this.rsv3 = rsv3;

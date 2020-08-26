@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -25,6 +25,7 @@
 
 package org.java_websocket;
 
+import org.java_websocket.interfaces.ISSLChannel;
 import org.java_websocket.util.ByteBufferUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,19 +61,19 @@ import java.util.concurrent.ExecutorService;
  *         <p>
  *         Modified by marci4 to allow the usage as a ByteChannel
  *         <p>
- *         Permission for usage recieved at May 25, 2017 by Alex Karnezis
+ *         Permission for usage received at May 25, 2017 by Alex Karnezis
  */
-public class SSLSocketChannel implements WrappedByteChannel, ByteChannel {
+public class SSLSocketChannel implements WrappedByteChannel, ByteChannel, ISSLChannel {
 
 	/**
 	 * Logger instance
 	 *
 	 * @since 1.4.0
 	 */
-	private static final Logger log = LoggerFactory.getLogger(SSLSocketChannel.class);
+	private final Logger log = LoggerFactory.getLogger(SSLSocketChannel.class);
 
 	/**
-	 * The underlaying socket channel
+	 * The underlying socket channel
 	 */
 	private final SocketChannel socketChannel;
 
@@ -166,7 +167,7 @@ public class SSLSocketChannel implements WrappedByteChannel, ByteChannel {
 				try {
 					result = engine.unwrap( peerNetData, peerAppData );
 				} catch ( SSLException e ) {
-					log.error("SSLExcpetion during unwrap", e);
+					log.error("SSLException during unwrap", e);
 					throw e;
 				}
 				switch(result.getStatus()) {
@@ -213,7 +214,7 @@ public class SSLSocketChannel implements WrappedByteChannel, ByteChannel {
 					myNetData = enlargePacketBuffer( myNetData );
 					break;
 				case BUFFER_UNDERFLOW:
-					throw new SSLException( "Buffer underflow occured after a wrap. I don't think we should ever get here." );
+					throw new SSLException( "Buffer underflow occurred after a wrap. I don't think we should ever get here." );
 				case CLOSED:
 					closeConnection();
 					return 0;
@@ -282,7 +283,7 @@ public class SSLSocketChannel implements WrappedByteChannel, ByteChannel {
 						try {
 							engine.closeInbound();
 						} catch ( SSLException e ) {
-							//Ignore, cant do anything against this exception
+							//Ignore, can't do anything against this exception
 						}
 						engine.closeOutbound();
 						// After closeOutbound the engine will be set to WRAP state, in order to try to send a close message to the client.
@@ -346,7 +347,7 @@ public class SSLSocketChannel implements WrappedByteChannel, ByteChannel {
 							myNetData = enlargePacketBuffer( myNetData );
 							break;
 						case BUFFER_UNDERFLOW:
-							throw new SSLException( "Buffer underflow occured after a wrap. I don't think we should ever get here." );
+							throw new SSLException( "Buffer underflow occurred after a wrap. I don't think we should ever get here." );
 						case CLOSED:
 							try {
 								myNetData.flip();
@@ -511,5 +512,10 @@ public class SSLSocketChannel implements WrappedByteChannel, ByteChannel {
 	@Override
 	public void close() throws IOException {
 		closeConnection();
+	}
+
+	@Override
+	public SSLEngine getSSLEngine() {
+		return engine;
 	}
 }

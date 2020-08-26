@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -25,6 +25,7 @@
 
 package org.java_websocket;
 
+import org.java_websocket.interfaces.ISSLChannel;
 import org.java_websocket.drafts.Draft;
 import org.java_websocket.drafts.Draft_6455;
 import org.java_websocket.enums.*;
@@ -33,6 +34,7 @@ import org.java_websocket.framing.CloseFrame;
 import org.java_websocket.framing.Framedata;
 import org.java_websocket.framing.PingFrame;
 import org.java_websocket.handshake.*;
+import org.java_websocket.protocols.IProtocol;
 import org.java_websocket.server.WebSocketServer.WebSocketWorker;
 import org.java_websocket.util.Charsetfunctions;
 
@@ -50,6 +52,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.SSLSession;
 
 /**
  * Represents one end (client or server) of a single WebSocketImpl connection.
@@ -82,7 +86,7 @@ public class WebSocketImpl implements WebSocket {
 	 *
 	 * @since 1.4.0
 	 */
-	private static final Logger log = LoggerFactory.getLogger(WebSocketImpl.class);
+	private final Logger log = LoggerFactory.getLogger(WebSocketImpl.class);
 
 	/**
 	 * Queue of buffers that need to be sent to the client.
@@ -149,7 +153,7 @@ public class WebSocketImpl implements WebSocket {
 	private String resourceDescriptor = null;
 
 	/**
-	 * Attribute, when the last pong was recieved
+	 * Attribute, when the last pong was received
 	 */
 	private long lastPong = System.nanoTime();
 
@@ -157,11 +161,6 @@ public class WebSocketImpl implements WebSocket {
 	 * Attribut to synchronize the write
 	 */
 	private final Object synchronizeWriteObject = new Object();
-
-	/**
-	 * Attribute to cache a ping frame
-	 */
-	private PingFrame pingFrame;
 
 	/**
 	 * Attribute to store connection attachment
@@ -429,7 +428,7 @@ public class WebSocketImpl implements WebSocket {
 			default:
 				errorCodeDescription = "500 Internal Server Error";
 		}
-		return ByteBuffer.wrap( Charsetfunctions.asciiBytes( "HTTP/1.1 " + errorCodeDescription + "\r\nContent-Type: text/html\nServer: TooTallNate Java-WebSocket\r\nContent-Length: " + ( 48 + errorCodeDescription.length() ) + "\r\n\r\n<html><head></head><body><h1>" + errorCodeDescription + "</h1></body></html>" ) );
+		return ByteBuffer.wrap( Charsetfunctions.asciiBytes( "HTTP/1.1 " + errorCodeDescription + "\r\nContent-Type: text/html\r\nServer: TooTallNate Java-WebSocket\r\nContent-Length: " + ( 48 + errorCodeDescription.length() ) + "\r\n\r\n<html><head></head><body><h1>" + errorCodeDescription + "</h1></body></html>" ) );
 	}
 
 	public synchronized void close( int code, String message, boolean remote ) {
@@ -485,7 +484,7 @@ public class WebSocketImpl implements WebSocket {
 
 	/**
 	 * This will close the connection immediately without a proper close handshake.
-	 * The code and the message therefore won't be transfered over the wire also they will be forwarded to onClose/onWebsocketClose.
+	 * The code and the message therefore won't be transferred over the wire also they will be forwarded to onClose/onWebsocketClose.
 	 *
 	 * @param code    the closing code
 	 * @param message the closing message
@@ -512,7 +511,7 @@ public class WebSocketImpl implements WebSocket {
 			try {
 				channel.close();
 			} catch ( IOException e ) {
-				if( e.getMessage().equals( "Broken pipe" ) ) {
+				if( e.getMessage() != null && e.getMessage().equals( "Broken pipe" ) ) {
 					log.trace( "Caught IOException: Broken pipe during closeConnection()", e );
 				} else {
 					log.error("Exception during channel.close()", e);
@@ -655,11 +654,12 @@ public class WebSocketImpl implements WebSocket {
 		send( Collections.singletonList( framedata ) );
 	}
 
-	public void sendPing() {
-		if( pingFrame == null ) {
-			pingFrame = new PingFrame();
-		}
-		sendFrame( pingFrame );
+	public void sendPing() throws NullPointerException {
+		// Gets a PingFrame from WebSocketListener(wsl) and sends it.
+		PingFrame pingFrame = wsl.onPreparePing(this);
+		if(pingFrame == null)
+			throw new NullPointerException("onPreparePing(WebSocket) returned null. PingFrame to sent can't be null.");
+		sendFrame(pingFrame);
 	}
 
 	@Override
@@ -790,9 +790,9 @@ public class WebSocketImpl implements WebSocket {
 	}
 
 	/**
-	 * Getter for the last pong recieved
+	 * Getter for the last pong received
 	 *
-	 * @return the timestamp for the last recieved pong
+	 * @return the timestamp for the last received pong
 	 */
 	long getLastPong() {
 		return lastPong;
@@ -818,6 +818,28 @@ public class WebSocketImpl implements WebSocket {
 	@SuppressWarnings("unchecked")
 	public <T> T getAttachment() {
 		return (T) attachment;
+	}
+
+	@Override
+	public boolean hasSSLSupport() {
+		return channel instanceof ISSLChannel;
+	}
+
+	@Override
+	public SSLSession getSSLSession() {
+		if (!hasSSLSupport()) {
+			throw new IllegalArgumentException("This websocket uses ws instead of wss. No SSLSession available.");
+		}
+		return ((ISSLChannel) channel).getSSLEngine().getSession();
+	}
+
+	@Override
+	public IProtocol getProtocol() {
+		if (draft == null)
+			return null;
+		if (!(draft instanceof Draft_6455))
+			throw new IllegalArgumentException("This draft does not support Sec-WebSocket-Protocol");
+		return ((Draft_6455) draft).getProtocol();
 	}
 
 	@Override

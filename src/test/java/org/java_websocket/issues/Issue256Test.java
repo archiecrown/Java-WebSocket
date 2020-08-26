@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -96,6 +96,7 @@ public class Issue256Test {
 		};
 		ws.setConnectionLostTimeout( 0 );
 		ws.start();
+		countServerDownLatch.await();
 	}
 
 	private void runTestScenarioReconnect( boolean closeBlocking ) throws Exception {

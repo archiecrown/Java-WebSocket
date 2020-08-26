@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -34,7 +34,7 @@ import org.junit.runners.Suite;
 		org.java_websocket.extensions.CompressionExtensionTest.class
 })
 /**
- * Start all tests for extensuins
+ * Start all tests for extensions
  */
 public class AllExtensionTests {
 }

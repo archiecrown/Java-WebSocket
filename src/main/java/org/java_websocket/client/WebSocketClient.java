@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -28,10 +28,13 @@ package org.java_websocket.client;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.Socket;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
@@ -41,9 +44,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.SocketFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.*;
 
 import org.java_websocket.AbstractWebSocket;
 import org.java_websocket.WebSocket;
@@ -58,6 +59,7 @@ import org.java_websocket.framing.Framedata;
 import org.java_websocket.handshake.HandshakeImpl1Client;
 import org.java_websocket.handshake.Handshakedata;
 import org.java_websocket.handshake.ServerHandshake;
+import org.java_websocket.protocols.IProtocol;
 
 /**
  * A subclass must implement at least <var>onOpen</var>, <var>onClose</var>, and <var>onMessage</var> to be
@@ -132,6 +134,14 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 	private int connectTimeout = 0;
 
 	/**
+	 * DNS resolver that translates a URI to an InetAddress
+	 *
+	 * @see InetAddress
+	 * @since 1.4.1
+	 */
+	private DnsResolver dnsResolver = null;
+
+	/**
 	 * Constructs a WebSocketClient instance and sets it to the connect to the
 	 * specified URI. The channel does not attampt to connect automatically. The connection
 	 * will be established once you call <var>connect</var>.
@@ -195,6 +205,12 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 		}
 		this.uri = serverUri;
 		this.draft = protocolDraft;
+		this.dnsResolver = new DnsResolver() {
+			@Override
+			public InetAddress resolve(URI uri) throws UnknownHostException {
+				return InetAddress.getByName(uri.getHost());
+			}
+		};
 		if(httpHeaders != null) {
 			headers = new TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER);
 			headers.putAll(httpHeaders);
@@ -267,6 +283,17 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 	}
 
 	/**
+	 * Sets a custom DNS resolver.
+	 *
+	 * @param dnsResolver The DnsResolver to use.
+	 *
+	 * @since 1.4.1
+	 */
+	public void setDnsResolver(DnsResolver dnsResolver) {
+		this.dnsResolver = dnsResolver;
+	}
+
+	/**
 	 * Reinitiates the websocket connection. This method does not block.
 	 * @since 1.3.8
 	 */
@@ -293,7 +320,7 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 	private void reset() {
 		Thread current = Thread.currentThread();
 		if (current == writeThread || current == connectReadThread) {
-			throw new IllegalStateException("You cannot initialize a reconnect out of the websocket thread. Use reconnect in another thread to insure a successful cleanup.");
+			throw new IllegalStateException("You cannot initialize a reconnect out of the websocket thread. Use reconnect in another thread to ensure a successful cleanup.");
 		}
 		try {
 			closeBlocking();
@@ -423,7 +450,6 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 			} else if( socket == null ) {
 				socket = new Socket( proxy );
 				isNewSocket = true;
-
 			} else if( socket.isClosed() ) {
 				throw new IOException();
 			}
@@ -431,17 +457,24 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 			socket.setTcpNoDelay( isTcpNoDelay() );
 			socket.setReuseAddress( isReuseAddr() );
 
-			if( !socket.isBound() ) {
-				socket.connect( new InetSocketAddress( uri.getHost(), getPort() ), connectTimeout );
+			if (!socket.isConnected()) {
+				InetSocketAddress addr = new InetSocketAddress(dnsResolver.resolve(uri), this.getPort());
+				socket.connect(addr, connectTimeout);
 			}
 
 			// if the socket is set by others we don't apply any TLS wrapper
 			if (isNewSocket && "wss".equals( uri.getScheme())) {
-
 				SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
 				sslContext.init(null, null, null);
 				SSLSocketFactory factory = sslContext.getSocketFactory();
 				socket = factory.createSocket(socket, uri.getHost(), getPort(), true);
+			}
+
+			if (socket instanceof SSLSocket) {
+				SSLSocket sslSocket = (SSLSocket)socket;
+				SSLParameters sslParameters = sslSocket.getSSLParameters();
+				onSetSSLParameters(sslParameters);
+				sslSocket.setSSLParameters(sslParameters);
 			}
 
 			istream = socket.getInputStream();
@@ -452,6 +485,15 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 			onWebsocketError( engine, e );
 			engine.closeConnection( CloseFrame.NEVER_CONNECTED, e.getMessage() );
 			return;
+		} catch (InternalError e) {
+			// https://bugs.openjdk.java.net/browse/JDK-8173620
+			if (e.getCause() instanceof InvocationTargetException && e.getCause().getCause() instanceof IOException) {
+				IOException cause = (IOException) e.getCause().getCause();
+				onWebsocketError(engine, cause);
+				engine.closeConnection(CloseFrame.NEVER_CONNECTED, cause.getMessage());
+				return;
+			}
+			throw e;
 		}
 
 		writeThread = new Thread( new WebsocketWriteThread(this) );
@@ -476,22 +518,31 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 	}
 
 	/**
+	 * Apply specific SSLParameters
+	 * If you override this method make sure to always call super.onSetSSLParameters() to ensure the hostname validation is active
+	 *
+	 * @param sslParameters the SSLParameters which will be used for the SSLSocket
+	 */
+	protected void onSetSSLParameters(SSLParameters sslParameters) {
+		// If you run into problem on Android (NoSuchMethodException), check out the wiki https://github.com/TooTallNate/Java-WebSocket/wiki/No-such-method-error-setEndpointIdentificationAlgorithm
+		// Perform hostname validation
+		sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+	}
+
+	/**
 	 * Extract the specified port
 	 * @return the specified port or the default port for the specific scheme
 	 */
 	private int getPort() {
 		int port = uri.getPort();
-		if( port == -1 ) {
-			String scheme = uri.getScheme();
-			if( "wss".equals( scheme ) ) {
-				return WebSocketImpl.DEFAULT_WSS_PORT;
-			} else if(  "ws".equals( scheme ) ) {
-				return WebSocketImpl.DEFAULT_PORT;
-			} else {
-				throw new IllegalArgumentException( "unknown scheme: " + scheme );
-			}
+		String scheme = uri.getScheme();
+		if( "wss".equals( scheme ) ) {
+			return port == -1 ? WebSocketImpl.DEFAULT_WSS_PORT : port;
+		} else if(  "ws".equals( scheme ) ) {
+			return port == -1 ? WebSocketImpl.DEFAULT_PORT : port;
+		} else {
+			throw new IllegalArgumentException( "unknown scheme: " + scheme );
 		}
-		return port;
 	}
 
 	/**
@@ -509,9 +560,9 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 		if( part2 != null )
 			path += '?' + part2;
 		int port = getPort();
-		String host = uri.getHost() + ( 
+		String host = uri.getHost() + (
 			(port != WebSocketImpl.DEFAULT_PORT && port != WebSocketImpl.DEFAULT_WSS_PORT)
-			? ":" + port 
+			? ":" + port
 			: "" );
 
 		HandshakeImpl1Client handshake = new HandshakeImpl1Client();
@@ -633,7 +684,7 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 		return null;
 	}
 
-	// ABTRACT METHODS /////////////////////////////////////////////////////////
+	// ABSTRACT METHODS /////////////////////////////////////////////////////////
 
 	/**
 	 * Called after an opening handshake has been performed and the given websocket is ready to be written on.
@@ -844,12 +895,24 @@ public abstract class WebSocketClient extends AbstractWebSocket implements Runna
 	public InetSocketAddress getRemoteSocketAddress() {
 		return engine.getRemoteSocketAddress();
 	}
-	
+
 	@Override
 	public String getResourceDescriptor() {
 		return uri.getPath();
 	}
 
+	@Override
+	public boolean hasSSLSupport() {
+		return engine.hasSSLSupport();
+	}
+
+	@Override
+	public SSLSession getSSLSession() {
+		return engine.getSSLSession();
+	}
+
+	@Override
+	public IProtocol getProtocol() { return engine.getProtocol();}
 
 	/**
 	 * Method to give some additional info for specific IOExceptions

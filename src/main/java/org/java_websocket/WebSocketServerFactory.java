@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2010-2019 Nathan Rajlich
+ *  Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -44,7 +44,7 @@ public interface WebSocketServerFactory extends WebSocketFactory {
     WebSocketImpl createWebSocket( WebSocketAdapter a, List<Draft> drafts );
 
     /**
-     * Allows to wrap the Socketchannel( key.channel() ) to insert a protocol layer( like ssl or proxy authentication) beyond the ws layer.
+     * Allows to wrap the SocketChannel( key.channel() ) to insert a protocol layer( like ssl or proxy authentication) beyond the ws layer.
      *
      * @param channel The SocketChannel to wrap
      * @param key a SelectionKey of an open SocketChannel.

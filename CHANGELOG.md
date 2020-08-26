@@ -1,5 +1,83 @@
 # Change log
 
+## Version Release 1.5.1 (2020/05/10)
+
+#### Bugs Fixed
+
+* [Issue 1011](https://github.com/TooTallNate/Java-WebSocket/issues/1011) - Crash on Android due to missing method `setEndpointIdentificationAlgorithm` on 1.5.0. ([PR 1014](https://github.com/TooTallNate/Java-WebSocket/pull/1014))
+
+In this release 1 issue and 1 pull request were closed.
+
+## Version Release 1.5.0 (2020/05/06)
+
+#### Breaking Changes
+
+This release requires API Level 1.7.
+
+#### Security 
+
+This release contains a security fix for [CVE-2020-11050](https://nvd.nist.gov/vuln/detail/CVE-2020-11050).
+
+Take a look at the advisory [here](https://github.com/TooTallNate/Java-WebSocket/security/advisories/GHSA-gw55-jm4h-x339) for more information.
+
+#### New Features
+
+* [Issue 574](https://github.com/TooTallNate/Java-WebSocket/issues/574) - Implementation of per message deflate extension ([PR 866](https://github.com/TooTallNate/Java-WebSocket/pull/866))
+* [PR 866](https://github.com/TooTallNate/Java-WebSocket/pull/866) - Add PerMessageDeflate Extension support, see #574
+* [Issue 997](https://github.com/TooTallNate/Java-WebSocket/issues/997) - Access to SSLParameters used by the WebSocketClient ([PR 1000](https://github.com/TooTallNate/Java-WebSocket/pull/1000))
+* [Issue 574](https://github.com/TooTallNate/Java-WebSocket/issues/574) - Implementation of per message deflate extension ([PR 866](https://github.com/TooTallNate/Java-WebSocket/pull/866))
+* [PR 1001](https://github.com/TooTallNate/Java-WebSocket/pull/1001) - Allow user to specify max number of pending connections to a server
+* [PR 1000](https://github.com/TooTallNate/Java-WebSocket/pull/1000) - SSLParameters for WebSocketClient
+* [PR 866](https://github.com/TooTallNate/Java-WebSocket/pull/866) - Add PerMessageDeflate Extension support, see #574
+
+In this release 3 issues and 4 pull requests were closed.
+
+###############################################################################
+
+## Version Release 1.4.1 (2020/03/12)
+
+#### Bugs Fixed
+
+* [Issue 940](https://github.com/TooTallNate/Java-WebSocket/issues/940) - WebSocket handshake fails over WSS, if client uses TLS False Start ([PR 943](https://github.com/TooTallNate/Java-WebSocket/pull/943))
+* [Issue 921](https://github.com/TooTallNate/Java-WebSocket/issues/921) - ConcurrentModificationException when looping connections
+* [Issue 905](https://github.com/TooTallNate/Java-WebSocket/issues/905) - IOException wrapped in InternalError not handled properly ([PR 901](https://github.com/TooTallNate/Java-WebSocket/pull/901))
+* [Issue 900](https://github.com/TooTallNate/Java-WebSocket/issues/900) - OnClose is not called when client disconnect ([PR 914](https://github.com/TooTallNate/Java-WebSocket/pull/914))
+* [Issue 869](https://github.com/TooTallNate/Java-WebSocket/issues/869) - Lost connection detection is sensitive to changes in system time ([PR 878](https://github.com/TooTallNate/Java-WebSocket/pull/878))
+* [Issue 665](https://github.com/TooTallNate/Java-WebSocket/issues/665) - Data read with end of SSL handshake is discarded ([PR 943](https://github.com/TooTallNate/Java-WebSocket/pull/943))
+* [PR 943](https://github.com/TooTallNate/Java-WebSocket/pull/943) - Merge pull request #943 from da-als/master
+* [PR 922](https://github.com/TooTallNate/Java-WebSocket/pull/922) - Fix ConcurrentModificationException when iterating through connection
+* [PR 914](https://github.com/TooTallNate/Java-WebSocket/pull/914) - Merge pull request #914 from marci4/Issue900
+* [PR 902](https://github.com/TooTallNate/Java-WebSocket/pull/902) - ConcurrentModificationException when using broadcast
+* [PR 901](https://github.com/TooTallNate/Java-WebSocket/pull/901) - fix when proxy tunneling failed (IOException is hidden) JDK-8173
+* [PR 878](https://github.com/TooTallNate/Java-WebSocket/pull/878) - Replace TimerTask with ScheduledExecutorService
+
+#### New Features
+
+* [Issue 969](https://github.com/TooTallNate/Java-WebSocket/issues/969) - Loggers should be declared non-static ([PR 970](https://github.com/TooTallNate/Java-WebSocket/pull/970))
+* [Issue 962](https://github.com/TooTallNate/Java-WebSocket/issues/962) - Improvements in socket connect to server ([PR 964](https://github.com/TooTallNate/Java-WebSocket/pull/964))
+* [Issue 941](https://github.com/TooTallNate/Java-WebSocket/issues/941) - How to send customized ping message on connectionLostTimeout interval ([PR 944](https://github.com/TooTallNate/Java-WebSocket/pull/944))
+* [Issue 890](https://github.com/TooTallNate/Java-WebSocket/issues/890) - Would like to get SSLSession from WebSocket on server to examine client certificates ([PR 893](https://github.com/TooTallNate/Java-WebSocket/pull/893))
+* [Issue 865](https://github.com/TooTallNate/Java-WebSocket/issues/865) - Append new headers to the client when reconnecting
+* [Issue 859](https://github.com/TooTallNate/Java-WebSocket/issues/859) - Hot wo specify a custom DNS Resolver ([PR 906](https://github.com/TooTallNate/Java-WebSocket/pull/906))
+* [PR 971](https://github.com/TooTallNate/Java-WebSocket/pull/971) - Enabled OSGi metadata in MANIFST-MF for created JAR
+* [PR 964](https://github.com/TooTallNate/Java-WebSocket/pull/964) - Use socket isConnected() method rather than isBound()
+* [PR 944](https://github.com/TooTallNate/Java-WebSocket/pull/944) - Add ability to customize ping messages with custom data
+* [PR 906](https://github.com/TooTallNate/Java-WebSocket/pull/906) - Implemented a custom DNS resolver, see #859
+* [PR 893](https://github.com/TooTallNate/Java-WebSocket/pull/893) -  Provide a way to access the SSLSession of a websocket instance
+* [PR 868](https://github.com/TooTallNate/Java-WebSocket/pull/868) - Add a way to put additional headers to handshake for connecting/reconnecting, see #865
+
+#### Refactoring
+
+* [Issue 907](https://github.com/TooTallNate/Java-WebSocket/issues/907) - build fails with Gradle 5+ ([PR 908](https://github.com/TooTallNate/Java-WebSocket/pull/908))
+* [Issue 869](https://github.com/TooTallNate/Java-WebSocket/issues/869) - Lost connection detection is sensitive to changes in system time ([PR 878](https://github.com/TooTallNate/Java-WebSocket/pull/878))
+* [PR 970](https://github.com/TooTallNate/Java-WebSocket/pull/970) - Made loggers non-static to support deployment in containers
+* [PR 931](https://github.com/TooTallNate/Java-WebSocket/pull/931) - Create new github actions
+* [PR 908](https://github.com/TooTallNate/Java-WebSocket/pull/908) - Remove outdated 'wrapper' task from build.gradle (#907)
+* [PR 878](https://github.com/TooTallNate/Java-WebSocket/pull/878) - Replace TimerTask with ScheduledExecutorService
+* [PR 874](https://github.com/TooTallNate/Java-WebSocket/pull/874) - Update dependencies
+
+In this release 14 issues and 17 pull requests were closed.
+
 ## Version Release 1.4.0 (2019/02/19)
 
 #### Breaking Changes

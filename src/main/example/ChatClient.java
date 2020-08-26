@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -146,7 +146,7 @@ public class ChatClient extends JFrame implements ActionListener {
 
 					@Override
 					public void onError( Exception ex ) {
-						ta.append( "Exception occured ...\n" + ex + "\n" );
+						ta.append( "Exception occurred ...\n" + ex + "\n" );
 						ta.setCaretPosition( ta.getDocument().getLength() );
 						ex.printStackTrace();
 						connect.setEnabled( true );

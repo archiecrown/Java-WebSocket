@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -45,16 +45,16 @@ public abstract class ControlFrame extends FramedataImpl1 {
 	@Override
 	public void isValid() throws InvalidDataException {
 		if( !isFin() ) {
-			throw new InvalidFrameException( "Control frame cant have fin==false set" );
+			throw new InvalidFrameException( "Control frame can't have fin==false set" );
 		}
 		if( isRSV1() ) {
-			throw new InvalidFrameException( "Control frame cant have rsv1==true set" );
+			throw new InvalidFrameException( "Control frame can't have rsv1==true set" );
 		}
 		if( isRSV2() ) {
-			throw new InvalidFrameException( "Control frame cant have rsv2==true set" );
+			throw new InvalidFrameException( "Control frame can't have rsv2==true set" );
 		}
 		if( isRSV3() ) {
-			throw new InvalidFrameException( "Control frame cant have rsv3==true set" );
+			throw new InvalidFrameException( "Control frame can't have rsv3==true set" );
 		}
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -24,6 +24,7 @@
  */
 package org.java_websocket;
 
+import org.java_websocket.interfaces.ISSLChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,25 +53,25 @@ import java.util.concurrent.Future;
 /**
  * Implements the relevant portions of the SocketChannel interface with the SSLEngine wrapper.
  */
-public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel {
-
-    /**
-     * Logger instance
-     *
-     * @since 1.4.0
-     */
-    private static final Logger log = LoggerFactory.getLogger(SSLSocketChannel2.class);
+public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel, ISSLChannel {
 
     /**
      * This object is used to feed the {@link SSLEngine}'s wrap and unwrap methods during the handshake phase.
      **/
     protected static ByteBuffer emptybuffer = ByteBuffer.allocate( 0 );
 
+    /**
+     * Logger instance
+     *
+     * @since 1.4.0
+     */
+    private final Logger log = LoggerFactory.getLogger(SSLSocketChannel2.class);
+
     protected ExecutorService exec;
 
     protected List<Future<?>> tasks;
 
-    /** raw payload incomming */
+    /** raw payload incoming */
     protected ByteBuffer inData;
     /** encrypted data outgoing */
     protected ByteBuffer outCrypt;
@@ -129,7 +130,7 @@ public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel {
     }
 
     /**
-     * This method will do whatever necessary to process the sslengine handshake.
+     * This method will do whatever necessary to process the sslEngine handshake.
      * Thats why it's called both from the {@link #read(ByteBuffer)} and {@link #write(ByteBuffer)}
      **/
     private synchronized void processHandshake() throws IOException {
@@ -214,6 +215,7 @@ public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel {
     }
 
     protected void createBuffers( SSLSession session ) {
+        saveCryptedData(); // save any remaining data in inCrypt
         int netBufferMax = session.getPacketBufferSize();
         int appBufferMax = Math.max(session.getApplicationBufferSize(), netBufferMax);
 
@@ -268,6 +270,7 @@ public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel {
      * @return the number of bytes read.
      **/
     public int read(ByteBuffer dst) throws IOException {
+        tryRestoreCryptedData();
         while (true) {
             if (!dst.hasRemaining())
                 return 0;
@@ -312,11 +315,11 @@ public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel {
             inCrypt.flip();
             unwrap();
 
-            int transfered = transfereTo(inData, dst);
-            if (transfered == 0 && isBlocking()) {
+            int transferred = transfereTo(inData, dst);
+            if (transferred == 0 && isBlocking()) {
                 continue;
             }
-            return transfered;
+            return transferred;
         }
     }
     /**
@@ -328,6 +331,7 @@ public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel {
         }
         if( !inData.hasRemaining() )
             inData.clear();
+        tryRestoreCryptedData();
         // test if some bytes left from last read (e.g. BUFFER_UNDERFLOW)
         if( inCrypt.hasRemaining() ) {
             unwrap();
@@ -395,7 +399,7 @@ public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel {
 
     @Override
     public boolean isNeedRead() {
-        return inData.hasRemaining() || ( inCrypt.hasRemaining() && readEngineResult.getStatus() != Status.BUFFER_UNDERFLOW && readEngineResult.getStatus() != Status.CLOSED );
+        return saveCryptData != null || inData.hasRemaining() || ( inCrypt.hasRemaining() && readEngineResult.getStatus() != Status.BUFFER_UNDERFLOW && readEngineResult.getStatus() != Status.CLOSED );
     }
 
     @Override
@@ -425,4 +429,35 @@ public class SSLSocketChannel2 implements ByteChannel, WrappedByteChannel {
         return socketChannel.isBlocking();
     }
 
+    @Override
+    public SSLEngine getSSLEngine() {
+        return sslEngine;
+    }
+
+
+    // to avoid complexities with inCrypt, extra unwrapped data after SSL handshake will be saved off in a byte array
+    // and the inserted back on first read
+    private byte[] saveCryptData = null;
+    private void saveCryptedData()
+    {
+        // did we find any extra data?
+        if (inCrypt != null && inCrypt.remaining() > 0)
+        {
+            int saveCryptSize = inCrypt.remaining();
+            saveCryptData = new byte[saveCryptSize];
+            inCrypt.get(saveCryptData);
+        }
+    }
+
+    private void tryRestoreCryptedData()
+    {
+        // was there any extra data, then put into inCrypt and clean up
+        if ( saveCryptData != null )
+        {
+            inCrypt.clear();
+            inCrypt.put( saveCryptData );
+            inCrypt.flip();
+            saveCryptData = null;
+        }
+    }
 }

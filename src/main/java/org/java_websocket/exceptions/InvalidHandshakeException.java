@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -28,7 +28,7 @@ package org.java_websocket.exceptions;
 import org.java_websocket.framing.CloseFrame;
 
 /**
- * exception which indicates that a invalid handshake was recieved (CloseFrame.PROTOCOL_ERROR)
+ * exception which indicates that a invalid handshake was received (CloseFrame.PROTOCOL_ERROR)
  */
 public class InvalidHandshakeException extends InvalidDataException {
 

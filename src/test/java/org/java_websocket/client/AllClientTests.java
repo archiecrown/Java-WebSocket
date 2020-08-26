@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -31,7 +31,9 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-		org.java_websocket.client.AttachmentTest.class
+		org.java_websocket.client.AttachmentTest.class,
+		org.java_websocket.client.SchemaCheckTest.class,
+		org.java_websocket.client.HeadersTest.class
 })
 /**
  * Start all tests for the client

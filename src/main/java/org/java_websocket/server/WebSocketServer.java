@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -26,9 +26,7 @@
 package org.java_websocket.server;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.ClosedByInterruptException;
@@ -46,13 +44,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.java_websocket.*;
 import org.java_websocket.drafts.Draft;
-import org.java_websocket.exceptions.InvalidDataException;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
+import org.java_websocket.exceptions.WrappedIOException;
 import org.java_websocket.framing.CloseFrame;
 import org.java_websocket.framing.Framedata;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.handshake.Handshakedata;
-import org.java_websocket.handshake.ServerHandshakeBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,14 +61,14 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class WebSocketServer extends AbstractWebSocket implements Runnable {
 
+	private static final int AVAILABLE_PROCESSORS = Runtime.getRuntime().availableProcessors();
+
 	/**
 	 * Logger instance
 	 *
 	 * @since 1.4.0
 	 */
-	private static final Logger log = LoggerFactory.getLogger(WebSocketServer.class);
-
-	private static final int AVAILABLE_PROCESSORS = Runtime.getRuntime().availableProcessors();
+	private final Logger log = LoggerFactory.getLogger(WebSocketServer.class);
 
 	/**
 	 * Holds the list of active WebSocket connections. "Active" means WebSocket
@@ -108,6 +105,13 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 	private final AtomicInteger queuesize = new AtomicInteger( 0 );
 
 	private WebSocketServerFactory wsf = new DefaultWebSocketServerFactory();
+
+	/**
+	 * Attribute which allows you to configure the socket "backlog" parameter
+	 * which determines how many client connections can be queued.
+	 * @since 1.5.0
+	 */
+	private int maxPendingConnections = -1;
 
 	/**
 	 * Creates a WebSocketServer that will attempt to
@@ -279,7 +283,9 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 	 * @since 1.3.8
 	 */
 	public Collection<WebSocket> getConnections() {
-		return Collections.unmodifiableCollection( new ArrayList<WebSocket>(connections) );
+		synchronized (connections) {
+			return Collections.unmodifiableCollection( new ArrayList<WebSocket>(connections) );
+		}
 	}
 
 	public InetSocketAddress getAddress() {
@@ -307,6 +313,26 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 		return Collections.unmodifiableList( drafts );
 	}
 
+	/**
+	 * Set the requested maximum number of pending connections on the socket. The exact semantics are implementation
+	 * specific. The value provided should be greater than 0. If it is less than or equal to 0, then
+	 * an implementation specific default will be used. This option will be passed as "backlog" parameter to {@link ServerSocket#bind(SocketAddress, int)}
+	 * @since 1.5.0
+	 */
+	public void setMaxPendingConnections(int numberOfConnections) {
+		maxPendingConnections = numberOfConnections;
+	}
+
+	/**
+	 * Returns the currently configured maximum number of pending connections.
+	 *
+	 * @see #setMaxPendingConnections(int)
+	 * @since 1.5.0
+	 */
+	public int getMaxPendingConnections() {
+		return maxPendingConnections;
+	}
+
 	// Runnable IMPLEMENTATION /////////////////////////////////////////////////
 	public void run() {
 		if (!doEnsureSingleThread()) {
@@ -320,7 +346,6 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 			int selectTimeout = 0;
 			while ( !selectorthread.isInterrupted() && iShutdownCount != 0) {
 				SelectionKey key = null;
-				WebSocketImpl conn = null;
 				try {
 					if (isclosed.get()) {
 						selectTimeout = 5;
@@ -334,7 +359,6 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 
 					while ( i.hasNext() ) {
 						key = i.next();
-						conn = null;
 						
 						if( !key.isValid() ) {
 							continue;
@@ -358,10 +382,10 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 					// an other thread may cancel the key
 				} catch ( ClosedByInterruptException e ) {
 					return; // do the same stuff as when InterruptedException is thrown
+				} catch ( WrappedIOException ex) {
+					handleIOException( key, ex.getConnection(), ex.getIOException());
 				} catch ( IOException ex ) {
-					if( key != null )
-						key.cancel();
-					handleIOException( key, conn, ex );
+					handleIOException( key, null, ex );
 				} catch ( InterruptedException e ) {
 					// FIXME controlled shutdown (e.g. take care of buffermanagement)
 					Thread.currentThread().interrupt();
@@ -445,7 +469,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 	 * @throws InterruptedException thrown by taking a buffer
 	 * @throws IOException if an error happened during read
 	 */
-	private boolean doRead(SelectionKey key, Iterator<SelectionKey> i) throws InterruptedException, IOException {
+	private boolean doRead(SelectionKey key, Iterator<SelectionKey> i) throws InterruptedException, WrappedIOException {
 		WebSocketImpl conn = (WebSocketImpl) key.attachment();
 		ByteBuffer buf = takeBuffer();
 		if(conn.getChannel() == null){
@@ -471,7 +495,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 			}
 		} catch ( IOException e ) {
 			pushBuffer( buf );
-			throw e;
+			throw new WrappedIOException(conn, e);
 		}
 		return true;
 	}
@@ -481,12 +505,16 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 	 * @param key the selectionkey to write on
 	 * @throws IOException if an error happened during batch
 	 */
-	private void doWrite(SelectionKey key) throws IOException {
+	private void doWrite(SelectionKey key) throws WrappedIOException {
 		WebSocketImpl conn = (WebSocketImpl) key.attachment();
-		if( SocketChannelIOHelper.batch( conn, conn.getChannel() ) ) {
-			if( key.isValid() ) {
-				key.interestOps(SelectionKey.OP_READ);
+		try {
+			if (SocketChannelIOHelper.batch(conn, conn.getChannel())) {
+				if (key.isValid()) {
+					key.interestOps(SelectionKey.OP_READ);
+				}
 			}
+		} catch (IOException e) {
+			throw new WrappedIOException(conn, e);
 		}
 	}
 
@@ -502,7 +530,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 			ServerSocket socket = server.socket();
 			socket.setReceiveBufferSize( WebSocketImpl.RCVBUF );
 			socket.setReuseAddress( isReuseAddr() );
-			socket.bind( address );
+			socket.bind( address, getMaxPendingConnections() );
 			selector = Selector.open();
 			server.register( selector, server.validOps() );
 			startConnectionLostTimer();
@@ -598,6 +626,9 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 
 	private void handleIOException( SelectionKey key, WebSocket conn, IOException ex ) {
 		// onWebsocketError( conn, ex );// conn may be null here
+		if (key != null) {
+			key.cancel();
+		}
 		if( conn != null ) {
 			conn.closeConnection( CloseFrame.ABNORMAL_CLOSE, ex.getMessage() );
 		} else if( key != null ) {
@@ -687,7 +718,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 				removed = this.connections.remove( ws );
 			} else {
 				//Don't throw an assert error if the ws is not in the list. e.g. when the other endpoint did not send any handshake. see #512
-				log.trace("Removing connection which is not in the connections collection! Possible no handshake recieved! {}", ws);
+				log.trace("Removing connection which is not in the connections collection! Possible no handshake received! {}", ws);
 			}
 		}
 		if( isclosed.get() && connections.isEmpty() ) {
@@ -792,14 +823,14 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 	}
 
 	/** Called after an opening handshake has been performed and the given websocket is ready to be written on.
-	 * @param conn The <tt>WebSocket</tt> instance this event is occuring on.
+	 * @param conn The <tt>WebSocket</tt> instance this event is occurring on.
 	 * @param handshake The handshake of the websocket instance
 	 */
 	public abstract void onOpen( WebSocket conn, ClientHandshake handshake );
 	/**
 	 * Called after the websocket connection has been closed.
 	 *
-	 * @param conn The <tt>WebSocket</tt> instance this event is occuring on.
+	 * @param conn The <tt>WebSocket</tt> instance this event is occurring on.
 	 * @param code
 	 *            The codes can be looked up here: {@link CloseFrame}
 	 * @param reason
@@ -812,7 +843,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 	 * Callback for string messages received from the remote host
 	 * 
 	 * @see #onMessage(WebSocket, ByteBuffer)
-	 * @param conn The <tt>WebSocket</tt> instance this event is occuring on.
+	 * @param conn The <tt>WebSocket</tt> instance this event is occurring on.
 	 * @param message The UTF-8 decoded message that was received.
 	 **/
 	public abstract void onMessage( WebSocket conn, String message );
@@ -829,7 +860,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 	/**
 	 * Called when the server started up successfully.
 	 *
-	 * If any error occured, onError is called instead.
+	 * If any error occurred, onError is called instead.
 	 */
 	public abstract void onStart();
 
@@ -924,13 +955,17 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 			return;
 		}
 		Map<Draft, List<Framedata>> draftFrames = new HashMap<Draft, List<Framedata>>();
-		for( WebSocket client : clients ) {
-			if( client != null ) {
+		List<WebSocket> clientCopy;
+		synchronized (clients) {
+			clientCopy = new ArrayList<WebSocket>(clients);
+		}
+		for (WebSocket client : clientCopy) {
+			if (client != null) {
 				Draft draft = client.getDraft();
 				fillFrames(draft, draftFrames, sData, bData);
 				try {
-					client.sendFrame( draftFrames.get( draft ) );
-				} catch ( WebsocketNotConnectedException e ) {
+					client.sendFrame(draftFrames.get(draft));
+				} catch (WebsocketNotConnectedException e) {
 					//Ignore this exception in this case
 				}
 			}
@@ -942,7 +977,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 	 * @param draft The draft to use
 	 * @param draftFrames The list of frames per draft to fill
 	 * @param sData the string data, can be null
-	 * @param bData the bytebuffer data, can be null
+	 * @param bData the byte buffer data, can be null
 	 */
 	private void fillFrames(Draft draft, Map<Draft, List<Framedata>> draftFrames, String sData, ByteBuffer bData) {
 		if( !draftFrames.containsKey( draft ) ) {
@@ -1001,7 +1036,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 		}
 
 		/**
-		 * call ws.decode on the bytebuffer
+		 * call ws.decode on the byteBuffer
 		 * @param ws the Websocket
 		 * @param buf the buffer to decode to
 		 * @throws InterruptedException thrown by pushBuffer

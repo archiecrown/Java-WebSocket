@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -56,6 +56,9 @@ public class Protocol implements IProtocol {
 
 	@Override
 	public boolean acceptProvidedProtocol( String inputProtocolHeader ) {
+		if ("".equals(providedProtocol)) {
+			return true;
+		}
 		String protocolHeader = patternSpace.matcher(inputProtocolHeader).replaceAll("");
 		String[] headers = patternComma.split(protocolHeader);
 		for( String header : headers ) {

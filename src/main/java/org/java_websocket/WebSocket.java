@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  *  Permission is hereby granted, free of charge, to any person
  *  obtaining a copy of this software and associated documentation
@@ -34,6 +34,9 @@ import org.java_websocket.enums.Opcode;
 import org.java_websocket.enums.ReadyState;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.framing.Framedata;
+import org.java_websocket.protocols.IProtocol;
+
+import javax.net.ssl.SSLSession;
 
 public interface WebSocket {
 
@@ -57,7 +60,7 @@ public interface WebSocket {
 
 	/**
 	 * This will close the connection immediately without a proper close handshake.
-	 * The code and the message therefore won't be transfered over the wire also they will be forwarded to onClose/onWebsocketClose.
+	 * The code and the message therefore won't be transferred over the wire also they will be forwarded to onClose/onWebsocketClose.
 	 * @param code the closing code
 	 * @param message the closing message
 	 **/
@@ -207,4 +210,27 @@ public interface WebSocket {
 	 * @since 1.3.7
 	 **/
 	<T> T getAttachment();
+
+	/**
+	 * Does this websocket use an encrypted (wss/ssl) or unencrypted (ws) connection
+	 * @return true, if the websocket does use wss and therefore has a SSLSession
+	 * @since 1.4.1
+	 */
+	boolean hasSSLSupport();
+
+	/**
+	 * Returns the ssl session of websocket, if ssl/wss is used for this instance.
+	 * @return the ssl session of this websocket instance
+	 * @throws IllegalArgumentException the underlying channel does not use ssl (use hasSSLSupport() to check)
+	 * @since 1.4.1
+	 */
+	SSLSession getSSLSession() throws IllegalArgumentException;
+
+	/**
+	 * Returns the used Sec-WebSocket-Protocol for this websocket connection
+	 * @return the Sec-WebSocket-Protocol or null, if no draft available
+	 * @throws IllegalArgumentException the underlying draft does not support a Sec-WebSocket-Protocol
+	 * @since 1.5.2
+	 */
+	IProtocol getProtocol();
 }

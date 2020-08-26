@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Nathan Rajlich
+ * Copyright (c) 2010-2020 Nathan Rajlich
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -32,6 +32,7 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.handshake.ServerHandshake;
 import org.java_websocket.server.DefaultSSLWebSocketServerFactory;
 import org.java_websocket.server.WebSocketServer;
+import org.java_websocket.util.SSLContextUtil;
 import org.java_websocket.util.SocketUtil;
 import org.junit.Test;
 
@@ -49,15 +50,18 @@ import java.security.cert.CertificateException;
 import java.util.concurrent.CountDownLatch;
 
 public class Issue825Test {
-    private CountDownLatch countClientDownLatch = new CountDownLatch(3);
-    private CountDownLatch countServerDownLatch = new CountDownLatch(1);
+
 
     @Test(timeout = 15000)
     public void testIssue() throws IOException, URISyntaxException, KeyStoreException, NoSuchAlgorithmException, KeyManagementException, UnrecoverableKeyException, CertificateException, InterruptedException {
+        final CountDownLatch countClientOpenLatch = new CountDownLatch(3);
+        final CountDownLatch countClientMessageLatch = new CountDownLatch(3);
+        final CountDownLatch countServerDownLatch = new CountDownLatch(1);
         int port = SocketUtil.getAvailablePort();
         final WebSocketClient webSocket = new WebSocketClient(new URI("wss://localhost:" + port)) {
             @Override
             public void onOpen(ServerHandshake handshakedata) {
+                countClientOpenLatch.countDown();
             }
 
             @Override
@@ -72,26 +76,10 @@ public class Issue825Test {
             public void onError(Exception ex) {
             }
         };
-        WebSocketServer server = new MyWebSocketServer(port, countServerDownLatch, countClientDownLatch);
+        WebSocketServer server = new MyWebSocketServer(port, countServerDownLatch, countClientMessageLatch);
 
         // load up the key store
-        String STORETYPE = "JKS";
-        String KEYSTORE = String.format("src%1$stest%1$1sjava%1$1sorg%1$1sjava_websocket%1$1skeystore.jks", File.separator);
-        String STOREPASSWORD = "storepassword";
-        String KEYPASSWORD = "keypassword";
-
-        KeyStore ks = KeyStore.getInstance(STORETYPE);
-        File kf = new File(KEYSTORE);
-        ks.load(new FileInputStream(kf), STOREPASSWORD.toCharArray());
-
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
-        kmf.init(ks, KEYPASSWORD.toCharArray());
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
-        tmf.init(ks);
-
-        SSLContext sslContext = null;
-        sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+        SSLContext sslContext = SSLContextUtil.getContext();
 
         server.setWebSocketFactory(new DefaultSSLWebSocketServerFactory(sslContext));
         webSocket.setSocketFactory(sslContext.getSocketFactory());
@@ -109,23 +97,23 @@ public class Issue825Test {
         webSocket.closeBlocking();
         //Disconnect manually and reconnect
         webSocket.reconnect();
-        Thread.sleep( 100 );
+        countClientOpenLatch.await();
         webSocket.send( "me" );
         Thread.sleep( 100 );
         webSocket.closeBlocking();
-        countClientDownLatch.await();
+        countClientMessageLatch.await();
     }
 
 
     private static class MyWebSocketServer extends WebSocketServer {
-        private final CountDownLatch countServerDownLatch;
-        private final CountDownLatch countClientDownLatch;
+        private final CountDownLatch countServerLatch;
+        private final CountDownLatch countClientMessageLatch;
 
 
-        public MyWebSocketServer(int port, CountDownLatch serverDownLatch, CountDownLatch countClientDownLatch) {
+        public MyWebSocketServer(int port, CountDownLatch serverDownLatch, CountDownLatch countClientMessageLatch) {
             super(new InetSocketAddress(port));
-            this.countServerDownLatch = serverDownLatch;
-            this.countClientDownLatch = countClientDownLatch;
+            this.countServerLatch = serverDownLatch;
+            this.countClientMessageLatch = countClientMessageLatch;
         }
 
         @Override
@@ -138,7 +126,7 @@ public class Issue825Test {
 
         @Override
         public void onMessage(WebSocket conn, String message) {
-            countClientDownLatch.countDown();
+            countClientMessageLatch.countDown();
         }
 
         @Override
@@ -148,7 +136,7 @@ public class Issue825Test {
 
         @Override
         public void onStart() {
-            countServerDownLatch.countDown();
+            countServerLatch.countDown();
         }
     }
 }
